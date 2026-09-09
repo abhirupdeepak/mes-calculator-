@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Gauss-Seidel Calculator</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --accent: #c15f3c;
+    --accent-dark: #9c4a2e;
+    --text: #2b2926;
+    --muted: #6b6560;
+    --border: #e4e0da;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 24px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  p.sub { color: var(--muted); margin-top: 0; margin-bottom: 20px; font-size: 14px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; align-items: end; }
+  .row > div { flex: 1; min-width: 120px; }
+  input[type=number] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+  }
+  table { border-collapse: collapse; margin-top: 8px; }
+  td { padding: 4px; }
+  td input { width: 70px; text-align: center; }
+  .eq-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .eq-row span { color: var(--muted); }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button:hover { background: var(--accent-dark); }
+  button.secondary {
+    background: transparent;
+    color: var(--accent-dark);
+    border: 1px solid var(--accent);
+  }
+  button.secondary:hover { background: #fbeee7; }
+  .btn-row { display: flex; gap: 10px; }
+  #result { white-space: pre-line; font-size: 14px; }
+  table.iters {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 10px;
+  }
+  table.iters th, table.iters td {
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    text-align: right;
+  }
+  table.iters th { background: #f1ede7; }
+  .status-ok { color: #2f7a4f; font-weight: 600; }
+  .status-warn { color: #b3401f; font-weight: 600; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .scroll { max-height: 320px; overflow-y: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Gauss-Seidel Calculator</h1>
+  <p class="sub">Solve a system of linear equations Ax = b iteratively.</p>
+
+  <div class="panel">
+    <div class="row">
+      <div>
+        <label>Number of equations (n)</label>
+        <input type="number" id="size" min="2" max="8" value="3">
+      </div>
+      <div>
+        <label>Tolerance</label>
+        <input type="number" id="tol" value="0.0001" step="0.0001">
+      </div>
+      <div>
+        <label>Max iterations</label>
+        <input type="number" id="maxIter" value="50" min="1">
+      </div>
+      <div class="btn-row">
+        <button class="secondary" id="buildBtn" type="button">Build matrix</button>
+      </div>
+    </div>
+
+    <div id="matrixArea"></div>
+
+    <div class="btn-row" style="margin-top:12px;">
+      <button id="solveBtn" type="button">Solve</button>
+      <button class="secondary" id="exampleBtn" type="button">Load example</button>
+    </div>
+  </div>
+
+  <div class="panel" id="resultPanel" style="display:none;">
+    <div id="result"></div>
+    <div class="scroll">
+      <table class="iters" id="iterTable"></table>
+    </div>
+    <p class="note">Note: Gauss-Seidel is guaranteed to converge for diagonally dominant or symmetric positive-definite matrices. It may still converge for other systems, but is not guaranteed to.</p>
+  </div>
+</div>
+
+<script>
+const matrixArea = document.getElementById('matrixArea');
+const resultPanel = document.getElementById('resultPanel');
+const resultDiv = document.getElementById('result');
+const iterTable = document.getElementById('iterTable');
+
+function buildMatrix(n, prefill) {
+  let html = '<label style="margin-top:10px;">Coefficients (A) and constants (b) — one row per equation</label><div>';
+  for (let i = 0; i < n; i++) {
+    html += '<div class="eq-row">';
+    for (let j = 0; j < n; j++) {
+      const val = prefill ? prefill.A[i][j] : (i === j ? 1 : 0);
+      html += `<input type="number" id="a_${i}_${j}" value="${val}" step="any">`;
+      html += `<span>x${j+1}${j < n-1 ? ' +' : ''}</span>`;
+    }
+    const bval = prefill ? prefill.b[i] : 0;
+    html += `<span>=</span><input type="number" id="b_${i}" value="${bval}" step="any">`;
+    html += '</div>';
+  }
+  html += '</div>';
+  html += '<label style="margin-top:10px;">Initial guess (x0)</label><div class="eq-row">';
+  for (let i = 0; i < n; i++) {
+    const xval = prefill ? prefill.x0[i] : 0;
+    html += `<input type="number" id="x0_${i}" value="${xval}" step="any"> `;
+  }
+  html += '</div>';
+  matrixArea.innerHTML = html;
+}
+
+document.getElementById('buildBtn').addEventListener('click', () => {
+  const n = parseInt(document.getElementById('size').value);
+  buildMatrix(n, null);
+  resultPanel.style.display = 'none';
+});
+
+document.getElementById('exampleBtn').addEventListener('click', () => {
+  const example = {
+    A: [[10, -1, 2], [-1, 11, -1], [2, -1, 10]],
+    b: [6, 25, -11],
+    x0: [0, 0, 0]
+  };
+  document.getElementById('size').value = 3;
+  buildMatrix(3, example);
+  resultPanel.style.display = 'none';
+});
+
+buildMatrix(3, null);
+
+document.getElementById('solveBtn').addEventListener('click', () => {
+  const n = parseInt(document.getElementById('size').value);
+  const tol = parseFloat(document.getElementById('tol').value);
+  const maxIter = parseInt(document.getElementById('maxIter').value);
+
+  const A = [];
+  const b = [];
+  const x = [];
+  for (let i = 0; i < n; i++) {
+    const row = [];
+    for (let j = 0; j < n; j++) {
+      row.push(parseFloat(document.getElementById(`a_${i}_${j}`).value));
+    }
+    A.push(row);
+    b.push(parseFloat(document.getElementById(`b_${i}`).value));
+    x.push(parseFloat(document.getElementById(`x0_${i}`).value));
+  }
+
+  // Check for zero diagonal
+  for (let i = 0; i < n; i++) {
+    if (A[i][i] === 0) {
+      resultPanel.style.display = 'block';
+      resultDiv.innerHTML = `<span class="status-warn">Cannot proceed: diagonal element A[${i+1}][${i+1}] is zero. Try reordering the equations.</span>`;
+      iterTable.innerHTML = '';
+      return;
+    }
+  }
+
+  const history = [x.slice()];
+  let converged = false;
+  let iterUsed = 0;
+
+  for (let k = 0; k < maxIter; k++) {
+    const xOld = x.slice();
+    for (let i = 0; i < n; i++) {
+      let sum = b[i];
+      for (let j = 0; j < n; j++) {
+        if (j !== i) sum -= A[i][j] * x[j];
+      }
+      x[i] = sum / A[i][i];
+    }
+    history.push(x.slice());
+    iterUsed = k + 1;
+
+    let maxDiff = 0;
+    for (let i = 0; i < n; i++) {
+      maxDiff = Math.max(maxDiff, Math.abs(x[i] - xOld[i]));
+    }
+    if (maxDiff < tol) {
+      converged = true;
+      break;
+    }
+  }
+
+  resultPanel.style.display = 'block';
+  let summary = '';
+  if (converged) {
+    summary += `<span class="status-ok">Converged after ${iterUsed} iterations.</span>\n\n`;
+  } else {
+    summary += `<span class="status-warn">Did not converge within ${maxIter} iterations (diagonal dominance may be lacking).</span>\n\n`;
+  }
+  summary += 'Solution:\n';
+  for (let i = 0; i < n; i++) {
+    summary += `  x${i+1} = ${x[i].toFixed(6)}\n`;
+  }
+  resultDiv.innerHTML = summary;
+
+  // Build iteration table
+  let thead = '<tr><th>Iter</th>';
+  for (let i = 0; i < n; i++) thead += `<th>x${i+1}</th>`;
+  thead += '</tr>';
+  let rows = '';
+  history.forEach((row, idx) => {
+    rows += `<tr><td>${idx}</td>`;
+    row.forEach(v => rows += `<td>${v.toFixed(6)}</td>`);
+    rows += '</tr>';
+  });
+  iterTable.innerHTML = thead + rows;
+});
+</script>
+</body>
+</html>
